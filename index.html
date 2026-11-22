@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASAP PHARMACY - Billing & Stock</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#78350f">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+@media print{body *{visibility:hidden}#invoice-print-area,#invoice-print-area *{visibility:visible}#invoice-print-area{position:absolute;left:0;top:0;width:100%}}
+input,select{outline:none}input:focus,select:focus{box-shadow:0 0 0 2px #d97706}
+</style>
+</head>
+<body class="bg-gray-100 text-gray-800 h-screen flex flex-col overflow-hidden">
+
+<header class="bg-amber-900 text-white px-4 py-2 flex items-center justify-between shadow-md shrink-0">
+  <div>
+    <div class="font-bold text-base"><i class="fa-solid fa-pills mr-1 text-red-300"></i> <span id="shop-name"></span></div>
+    <div class="text-[11px] text-amber-200" id="shop-addr"></div>
+  </div>
+  <div class="text-right text-[11px] text-amber-100">
+    <div id="shop-contact"></div>
+    <div id="clock" class="font-mono"></div>
+  </div>
+</header>
+
+<nav class="bg-amber-800 text-white px-3 py-1.5 flex items-center justify-between text-xs shrink-0 overflow-x-auto gap-4">
+  <div class="flex items-center gap-3 whitespace-nowrap">
+    <button class="nav-btn px-2 py-1" data-tab="dashboard" onclick="tab('dashboard')"><i class="fa-solid fa-chart-line"></i> Dashboard</button>
+    <button class="nav-btn px-2 py-1" data-tab="pos" onclick="tab('pos')"><i class="fa-solid fa-cash-register"></i> Sales</button>
+    <button class="nav-btn px-2 py-1" data-tab="inventory" onclick="tab('inventory')"><i class="fa-solid fa-boxes-stacked"></i> Stock</button>
+    <button class="nav-btn px-2 py-1" data-tab="purchase" onclick="tab('purchase')"><i class="fa-solid fa-file-invoice-dollar"></i> Purchases</button>
+    <button class="nav-btn px-2 py-1" data-tab="reports" onclick="tab('reports')"><i class="fa-solid fa-chart-pie"></i> Reports</button>
+  </div>
+  <div class="flex items-center gap-2 whitespace-nowrap">
+    <button onclick="backup()" class="bg-amber-700 hover:bg-amber-600 px-2 py-1 rounded"><i class="fa-solid fa-download"></i> Backup</button>
+    <label class="bg-amber-700 hover:bg-amber-600 px-2 py-1 rounded cursor-pointer"><i class="fa-solid fa-upload"></i> Restore<input type="file" accept=".json" class="hidden" onchange="restore(this)"></label>
+    <button onclick="clearAll()" class="bg-red-800 hover:bg-red-700 px-2 py-1 rounded"><i class="fa-solid fa-trash"></i> Clear all</button>
+  </div>
+</nav>
+
+<main class="flex-1 overflow-y-auto p-3 md:p-4">
+
+<!-- DASHBOARD -->
+<section id="tab-dashboard" class="tab space-y-4">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-white text-sm font-bold">
+    <button onclick="tab('pos')" class="bg-red-700 hover:bg-red-800 p-4 rounded-xl shadow"><i class="fa-solid fa-cart-plus text-xl block mb-1"></i>New sale</button>
+    <button onclick="openPO('Pending')" class="bg-rose-700 hover:bg-rose-800 p-4 rounded-xl shadow"><i class="fa-solid fa-file-circle-plus text-xl block mb-1"></i>Purchase order</button>
+    <button onclick="openPO('Received')" class="bg-rose-900 hover:bg-black p-4 rounded-xl shadow"><i class="fa-solid fa-file-invoice text-xl block mb-1"></i>Purchase invoice</button>
+    <button onclick="openPay()" class="bg-amber-600 hover:bg-amber-700 p-4 rounded-xl shadow"><i class="fa-solid fa-wallet text-xl block mb-1"></i>Add payment</button>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="bg-white p-4 rounded-xl border"><div class="text-xs text-gray-500">Today's sales</div><div class="text-xl font-extrabold" id="s-today"></div></div>
+    <div class="bg-white p-4 rounded-xl border"><div class="text-xs text-gray-500">This month's sales</div><div class="text-xl font-extrabold" id="s-month"></div></div>
+    <div class="bg-white p-4 rounded-xl border"><div class="text-xs text-gray-500">To collect from customers</div><div class="text-xl font-extrabold text-purple-600" id="s-collect"></div></div>
+    <div class="bg-white p-4 rounded-xl border"><div class="text-xs text-gray-500">To pay suppliers</div><div class="text-xl font-extrabold text-rose-600" id="s-pay"></div></div>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <button onclick="goInv('out')" class="bg-white p-3 rounded-xl border text-left hover:border-amber-500"><div class="text-xs text-gray-500">Out of stock</div><div class="text-lg font-bold text-amber-600" id="s-out"></div></button>
+    <button onclick="goInv('low')" class="bg-white p-3 rounded-xl border text-left hover:border-amber-500"><div class="text-xs text-gray-500">Low stock (under 20)</div><div class="text-lg font-bold text-amber-600" id="s-low"></div></button>
+    <button onclick="goInv('near')" class="bg-white p-3 rounded-xl border text-left hover:border-amber-500"><div class="text-xs text-gray-500">Expiring in 90 days</div><div class="text-lg font-bold text-amber-600" id="s-near"></div></button>
+    <button onclick="goInv('expired')" class="bg-white p-3 rounded-xl border text-left hover:border-red-500"><div class="text-xs text-gray-500">Expired</div><div class="text-lg font-bold text-red-600" id="s-exp"></div></button>
+  </div>
+</section>
+
+<!-- POS -->
+<section id="tab-pos" class="tab hidden flex flex-col md:flex-row gap-4 md:h-full">
+  <div class="w-full md:w-3/5 flex flex-col bg-white rounded-xl border overflow-hidden">
+    <div class="p-3 bg-amber-900 text-white text-sm font-bold">Medicines</div>
+    <div class="p-3 bg-gray-50 border-b flex gap-2">
+      <input id="pos-q" oninput="renderPOS()" placeholder="Search medicine or batch" class="flex-1 p-2 border rounded text-sm">
+      <select id="pos-cat" onchange="renderPOS()" class="p-2 border rounded text-sm bg-white"><option value="">All</option><option>Tablet</option><option>Syrup</option><option>Injection</option><option>Ointment</option><option>Device</option></select>
+    </div>
+    <div id="pos-grid" class="flex-1 overflow-y-auto p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[55vh] md:max-h-none content-start"></div>
+  </div>
+  <div class="w-full md:w-2/5 flex flex-col bg-white rounded-xl border overflow-hidden">
+    <div class="p-3 bg-red-700 text-white flex justify-between text-sm font-bold">Current invoice <button onclick="cart=[];renderCart()" class="text-xs bg-red-900 px-2 rounded">Clear</button></div>
+    <div class="p-3 bg-gray-50 border-b grid grid-cols-2 gap-2 text-xs">
+      <input id="c-name" placeholder="Customer name" class="p-1.5 border rounded">
+      <input id="c-phone" placeholder="Mobile number" class="p-1.5 border rounded">
+    </div>
+    <div class="flex-1 overflow-auto"><table class="w-full text-xs"><thead class="bg-gray-100"><tr><th class="p-2 text-left">Item</th><th class="p-2">Qty</th><th class="p-2 text-right">Total</th><th></th></tr></thead><tbody id="cart-body" class="divide-y"></tbody></table></div>
+    <div class="p-3 bg-gray-50 border-t text-xs space-y-1">
+      <div class="flex justify-between"><span>Subtotal</span><span id="t-sub"></span></div>
+      <div class="flex justify-between items-center"><span>Discount %</span><input id="disc" type="number" min="0" max="100" value="0" oninput="renderCart()" class="w-14 p-0.5 border rounded text-center"></div>
+      <div class="flex justify-between"><span>GST</span><span id="t-tax"></span></div>
+      <div class="flex justify-between font-bold text-base pt-1 border-t"><span>Total</span><span id="t-total" class="text-red-700"></span></div>
+      <div class="flex gap-2 pt-1">
+        <select id="pay-mode" class="p-2 border rounded bg-white"><option>Cash</option><option>UPI / QR</option><option>Card</option><option>Credit / Due</option></select>
+        <button onclick="sell()" class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold py-2 rounded"><i class="fa-solid fa-print"></i> Save & print bill</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INVENTORY -->
+<section id="tab-inventory" class="tab hidden bg-white rounded-xl border overflow-hidden">
+  <div class="p-3 bg-amber-900 text-white flex justify-between items-center text-sm font-bold">Stock <button onclick="openMed()" class="bg-red-700 px-3 py-1 rounded text-xs">+ Add medicine</button></div>
+  <div class="p-3 bg-gray-50 border-b flex gap-2">
+    <input id="inv-q" oninput="renderInv()" placeholder="Search name, batch, category" class="flex-1 p-2 border rounded text-sm">
+    <select id="inv-f" onchange="renderInv()" class="p-2 border rounded text-sm bg-white"><option value="all">All</option><option value="instock">In stock</option><option value="low">Low (under 20)</option><option value="out">Out of stock</option><option value="near">Expiring in 90 days</option><option value="expired">Expired</option></select>
+  </div>
+  <div class="overflow-x-auto"><table class="w-full text-xs min-w-[720px]"><thead class="bg-gray-100"><tr><th class="p-2 text-left">Medicine</th><th class="p-2 text-left">Category</th><th class="p-2">Batch</th><th class="p-2">Expiry</th><th class="p-2 text-right">MRP</th><th class="p-2 text-right">Price</th><th class="p-2">GST</th><th class="p-2">Qty</th><th class="p-2">Status</th><th class="p-2"></th></tr></thead><tbody id="inv-body" class="divide-y"></tbody></table></div>
+</section>
+
+<!-- PURCHASES -->
+<section id="tab-purchase" class="tab hidden bg-white rounded-xl border overflow-hidden">
+  <div class="p-3 bg-amber-900 text-white flex justify-between items-center text-sm font-bold">Purchases <span class="flex gap-2"><button onclick="openPO('Pending')" class="bg-red-700 px-3 py-1 rounded text-xs">+ Order</button><button onclick="openPO('Received')" class="bg-rose-900 px-3 py-1 rounded text-xs">+ Invoice</button></span></div>
+  <div class="p-3 bg-gray-50 border-b text-xs font-bold text-rose-600">Total to pay suppliers: <span id="po-due"></span></div>
+  <div class="overflow-x-auto"><table class="w-full text-xs min-w-[720px]"><thead class="bg-gray-100"><tr><th class="p-2 text-left">No.</th><th class="p-2 text-left">Supplier</th><th class="p-2">Date</th><th class="p-2">Items</th><th class="p-2 text-right">Amount</th><th class="p-2 text-right">Paid</th><th class="p-2 text-right">Due</th><th class="p-2">Status</th><th class="p-2"></th></tr></thead><tbody id="po-body" class="divide-y"></tbody></table></div>
+</section>
+
+<!-- REPORTS -->
+<section id="tab-reports" class="tab hidden bg-white rounded-xl border overflow-hidden">
+  <div class="p-3 bg-amber-900 text-white flex justify-between items-center text-sm font-bold">Sales register <button onclick="exportCSV()" class="bg-amber-700 px-3 py-1 rounded text-xs">Export CSV</button></div>
+  <div class="p-3 bg-gray-50 border-b flex flex-wrap gap-3 items-center text-xs">
+    <select id="rep-m" onchange="renderRep()" class="p-2 border rounded bg-white"></select>
+    <span id="rep-sum" class="font-semibold text-gray-700"></span>
+  </div>
+  <div class="overflow-x-auto"><table class="w-full text-xs min-w-[640px]"><thead class="bg-gray-100"><tr><th class="p-2 text-left">Invoice</th><th class="p-2 text-left">Date</th><th class="p-2 text-left">Customer</th><th class="p-2 text-left">Payment</th><th class="p-2 text-right">Total</th><th class="p-2 text-right">Due</th><th class="p-2"></th></tr></thead><tbody id="rep-body" class="divide-y"></tbody></table></div>
+</section>
+</main>
+
+<!-- MEDICINE MODAL -->
+<div id="m-med" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-3">
+ <form onsubmit="saveMed(event)" class="bg-white rounded-xl w-full max-w-lg p-4 space-y-3 text-xs">
+  <h3 id="med-title" class="font-bold text-sm">Add medicine</h3>
+  <input type="hidden" id="med-id">
+  <div class="grid grid-cols-2 gap-2">
+    <input id="med-name" required placeholder="Medicine name" class="p-2 border rounded">
+    <select id="med-cat" class="p-2 border rounded bg-white"><option>Tablet</option><option>Syrup</option><option>Injection</option><option>Ointment</option><option>Device</option></select>
+    <input id="med-batch" required placeholder="Batch no." class="p-2 border rounded">
+    <input id="med-exp" type="date" required class="p-2 border rounded">
+    <input id="med-qty" type="number" min="0" required placeholder="Quantity" class="p-2 border rounded">
+    <select id="med-gst" class="p-2 border rounded bg-white"><option value="0">GST 0%</option><option value="5">GST 5%</option><option value="12">GST 12%</option><option value="18">GST 18%</option></select>
+    <input id="med-mrp" type="number" step="0.01" min="0" required placeholder="MRP" class="p-2 border rounded">
+    <input id="med-price" type="number" step="0.01" min="0" required placeholder="Selling price" class="p-2 border rounded">
+  </div>
+  <div class="flex justify-end gap-2 pt-2 border-t"><button type="button" onclick="closeM('m-med')" class="px-4 py-2 bg-gray-200 rounded">Cancel</button><button class="px-4 py-2 bg-red-700 text-white rounded font-bold">Save medicine</button></div>
+ </form>
+</div>
+
+<!-- PURCHASE MODAL -->
+<div id="m-po" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-3">
+ <form onsubmit="savePO(event)" class="bg-white rounded-xl w-full max-w-xl p-4 space-y-3 text-xs max-h-[92vh] overflow-y-auto">
+  <h3 id="po-title" class="font-bold text-sm">New purchase</h3>
+  <div class="grid grid-cols-3 gap-2">
+    <input id="po-sup" required placeholder="Supplier name" class="p-2 border rounded col-span-2">
+    <input id="po-date" type="date" required class="p-2 border rounded">
+    <select id="po-status" class="p-2 border rounded bg-white col-span-2"><option value="Pending">Pending delivery</option><option value="Received">Received (add to stock now)</option></select>
+    <input id="po-paid" type="number" step="0.01" min="0" placeholder="Paid now (₹)" class="p-2 border rounded">
+  </div>
+  <div id="po-rows" class="space-y-2"></div>
+  <button type="button" onclick="addRow()" class="text-amber-700 font-bold">+ Add item</button>
+  <div class="flex justify-between items-center pt-2 border-t"><span class="font-bold">Total: <span id="po-total">₹0.00</span></span><span class="flex gap-2"><button type="button" onclick="closeM('m-po')" class="px-4 py-2 bg-gray-200 rounded">Cancel</button><button class="px-4 py-2 bg-red-700 text-white rounded font-bold">Save</button></span></div>
+ </form>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div id="m-pay" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-3">
+ <form onsubmit="savePay(event)" class="bg-white rounded-xl w-full max-w-md p-4 space-y-3 text-xs">
+  <h3 class="font-bold text-sm">Add payment</h3>
+  <select id="pay-type" onchange="fillPay()" class="w-full p-2 border rounded bg-white"><option value="sup">Pay a supplier</option><option value="cus">Collect from a customer</option></select>
+  <select id="pay-ref" onchange="payDefault()" class="w-full p-2 border rounded bg-white"></select>
+  <input id="pay-amt" type="number" step="0.01" min="0.01" required placeholder="Amount (₹)" class="w-full p-2 border rounded">
+  <div class="flex justify-end gap-2 pt-2 border-t"><button type="button" onclick="closeM('m-pay')" class="px-4 py-2 bg-gray-200 rounded">Cancel</button><button class="px-4 py-2 bg-red-700 text-white rounded font-bold">Save payment</button></div>
+ </form>
+</div>
+
+<!-- INVOICE MODAL -->
+<div id="m-inv" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-3">
+ <div class="bg-white rounded-xl w-full max-w-md flex flex-col max-h-[90vh]">
+  <div id="invoice-print-area" class="p-5 overflow-y-auto text-xs font-mono"></div>
+  <div class="p-3 bg-gray-50 border-t flex justify-end gap-2 text-xs"><button onclick="closeM('m-inv')" class="px-4 py-2 bg-gray-200 rounded">Close</button><button onclick="window.print()" class="px-4 py-2 bg-red-700 text-white rounded font-bold">Print bill</button></div>
+ </div>
+</div>
+
+<div id="toast" class="fixed bottom-4 right-4 bg-gray-900 text-white px-4 py-2 rounded-xl z-[60] hidden text-xs"></div>
+
+<script>
+// ---- Shop details (edit here; GSTIN and Drug Licence print on bills when filled) ----
+const SHOP = { name:'ASAP PHARMACY', owner:'Suraj Bairagi', phone:'8927699690', email:'one69991@gmail.com',
+  addr:'Panikhaki Bazar, Aranghata, Nadia, West Bengal - 741501', gstin:'', dl:'' };
+
+const KEY = 'asap_db';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const inr = n => '₹' + (+n || 0).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+const r2 = n => Math.round(n * 100) / 100;
+const daysLeft = d => (new Date(d + 'T23:59:59') - new Date()) / 864e5;
+const fdate = iso => new Date(iso).toLocaleString('en-GB', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+const ym = iso => { const d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+const nextNo = (arr, p, start) => p + (Math.max(start - 1, ...arr.map(x => parseInt(x.id.split('-')[1]) || 0)) + 1);
+
+const iso = (m, y) => `${y}-${String(m).padStart(2,'0')}-28`;
+const seed = () => ({
+  inv: [
+    { id:'1', name:'Paracetamol 650mg Tab', cat:'Tablet', batch:'PCT650A', exp:'2028-05-12', mrp:35, price:30, gst:12, qty:150 },
+    { id:'2', name:'Amoxicillin 500mg Cap', cat:'Tablet', batch:'AMX50B', exp:'2027-11-20', mrp:120, price:105, gst:12, qty:85 },
+    { id:'3', name:'Cough Syrup 100ml', cat:'Syrup', batch:'COUGH1', exp:'2027-09-10', mrp:85, price:75, gst:12, qty:0 },
+    { id:'4', name:'Cetirizine 10mg Tab', cat:'Tablet', batch:'CET10D', exp:'2028-12-01', mrp:25, price:20, gst:12, qty:320 }
+  ], po: [], sales: [], pay: []
+});
+let db = JSON.parse(localStorage.getItem(KEY) || 'null') || seed();
+let cart = [];
+const save = () => localStorage.setItem(KEY, JSON.stringify(db));
+const toast = t => { const b = $('toast'); b.textContent = t; b.classList.remove('hidden'); setTimeout(() => b.classList.add('hidden'), 2800); };
+const openM = id => { $(id).classList.remove('hidden'); $(id).classList.add('flex'); };
+const closeM = id => { $(id).classList.add('hidden'); $(id).classList.remove('flex'); };
+
+function tab(n) {
+  document.querySelectorAll('.tab').forEach(s => s.classList.add('hidden'));
+  $('tab-' + n).classList.remove('hidden');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('border-b-2', b.dataset.tab === n));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('font-bold', b.dataset.tab === n));
+  renderAll();
+}
+function renderAll() { renderDash(); renderPOS(); renderCart(); renderInv(); renderPO(); renderRep(); }
+
+// ---- Status helpers ----
+function itemState(i) {
+  const d = daysLeft(i.exp);
+  return { expired: d < 0, near: d >= 0 && d <= 90, out: i.qty === 0, low: i.qty > 0 && i.qty < 20 };
+}
+const poDue = p => r2(p.amount - p.paid);
+const saleDue = s => r2(s.total - s.paid);
+
+// ---- Dashboard ----
+function renderDash() {
+  const now = new Date(), t = now.toDateString(), m = ym(now.toISOString());
+  let td = 0, mo = 0, collect = 0, pay = 0;
+  db.sales.forEach(s => { if (new Date(s.date).toDateString() === t) td += s.total; if (ym(s.date) === m) mo += s.total; collect += saleDue(s); });
+  db.po.forEach(p => pay += poDue(p));
+  $('s-today').textContent = inr(td); $('s-month').textContent = inr(mo);
+  $('s-collect').textContent = inr(collect); $('s-pay').textContent = inr(pay);
+  const st = db.inv.map(itemState);
+  $('s-out').textContent = st.filter(x => x.out).length;
+  $('s-low').textContent = st.filter(x => x.low).length;
+  $('s-near').textContent = st.filter(x => x.near).length;
+  $('s-exp').textContent = st.filter(x => x.expired).length;
+}
+function goInv(f) { $('inv-f').value = f; tab('inventory'); }
+
+// ---- POS ----
+function renderPOS() {
+  const q = $('pos-q').value.toLowerCase(), c = $('pos-cat').value;
+  const list = db.inv.filter(i => (i.name.toLowerCase().includes(q) || i.batch.toLowerCase().includes(q)) && (!c || i.cat === c));
+  $('pos-grid').innerHTML = list.length ? list.map(i => {
+    const s = itemState(i), blocked = s.out || s.expired;
+    return `<div class="border rounded-lg p-2.5 flex flex-col justify-between">
+      <div><div class="font-bold text-xs">${esc(i.name)}</div>
+      <div class="text-[11px] text-gray-500">Batch ${esc(i.batch)} · Exp ${esc(i.exp)}</div></div>
+      <div class="mt-2 pt-2 border-t flex justify-between items-center">
+        <div><span class="font-bold text-red-700 text-xs">${inr(i.price)}</span> <span class="text-[10px] text-gray-400 line-through">${inr(i.mrp)}</span>
+        <div class="text-[10px] ${s.expired ? 'text-red-600' : i.qty > 20 ? 'text-green-600' : 'text-amber-600'}">${s.expired ? 'Expired' : 'Stock: ' + i.qty}</div></div>
+        <button ${blocked ? 'disabled' : ''} onclick="addCart('${i.id}')" class="${blocked ? 'bg-gray-300' : 'bg-red-700 hover:bg-red-800'} text-white text-xs px-2.5 py-1 rounded">Add</button>
+      </div></div>`;
+  }).join('') : '<div class="col-span-2 text-center text-gray-400 py-8 text-xs">No medicines found.</div>';
+}
+function addCart(id) {
+  const i = db.inv.find(x => x.id === id), c = cart.find(x => x.id === id);
+  if (!i || i.qty <= 0 || itemState(i).expired) return toast('This item cannot be sold.');
+  if (c) { if (c.qty + 1 > i.qty) return toast('Not enough stock.'); c.qty++; } else cart.push({ id, qty: 1 });
+  renderCart();
+}
+function cartQty(id, d) {
+  const c = cart.find(x => x.id === id), i = db.inv.find(x => x.id === id);
+  if (!c || !i) return;
+  const n = c.qty + d;
+  if (n <= 0) cart = cart.filter(x => x.id !== id);
+  else if (n > i.qty) return toast('Not enough stock.');
+  else c.qty = n;
+  renderCart();
+}
+function calc() {
+  const dp = Math.min(100, Math.max(0, +$('disc').value || 0));
+  let sub = 0, tax = 0;
+  cart.forEach(c => { const i = db.inv.find(x => x.id === c.id); if (!i) return; const line = i.price * c.qty; sub += line; tax += line * (1 - dp / 100) * i.gst / 100; });
+  const disc = sub * dp / 100;
+  return { sub: r2(sub), disc: r2(disc), tax: r2(tax), total: r2(sub - disc + tax) };
+}
+function renderCart() {
+  cart = cart.filter(c => db.inv.some(i => i.id === c.id));
+  $('cart-body').innerHTML = cart.length ? cart.map(c => {
+    const i = db.inv.find(x => x.id === c.id);
+    return `<tr><td class="p-2">${esc(i.name)}<div class="text-[10px] text-gray-500">${esc(i.batch)} · GST ${i.gst}%</div></td>
+      <td class="p-2 text-center whitespace-nowrap"><button onclick="cartQty('${c.id}',-1)" class="px-1.5 border rounded">-</button> <b>${c.qty}</b> <button onclick="cartQty('${c.id}',1)" class="px-1.5 border rounded">+</button></td>
+      <td class="p-2 text-right font-bold">${inr(i.price * c.qty)}</td>
+      <td class="p-2"><button onclick="cartQty('${c.id}',-999)" class="text-red-500"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+  }).join('') : '<tr><td colspan="4" class="text-center text-gray-400 py-6">Add medicines from the list.</td></tr>';
+  const t = calc();
+  $('t-sub').textContent = inr(t.sub); $('t-tax').textContent = inr(t.tax); $('t-total').textContent = inr(t.total);
+}
+function sell() {
+  if (!cart.length) return toast('Add at least one medicine.');
+  const t = calc(), mode = $('pay-mode').value;
+  const items = cart.map(c => { const i = db.inv.find(x => x.id === c.id); i.qty -= c.qty; return { name: i.name, batch: i.batch, qty: c.qty, price: i.price, gst: i.gst }; });
+  const s = { id: nextNo(db.sales, 'INV-', 1001), date: new Date().toISOString(), customer: $('c-name').value.trim() || 'Walk-in customer',
+    phone: $('c-phone').value.trim(), mode, items, sub: t.sub, disc: t.disc, tax: t.tax, total: t.total, paid: mode === 'Credit / Due' ? 0 : t.total };
+  db.sales.unshift(s); save();
+  cart = []; $('disc').value = 0; $('c-name').value = ''; $('c-phone').value = '';
+  renderAll(); showInv(s.id); toast('Sale saved.');
+}
+function showInv(id) {
+  const s = db.sales.find(x => x.id === id); if (!s) return;
+  $('invoice-print-area').innerHTML = `
+    <div class="text-center pb-2 border-b border-gray-400">
+      <div class="font-bold text-base">${esc(SHOP.name)}</div>
+      <div>${esc(SHOP.addr)}</div><div>Ph: ${esc(SHOP.phone)} | ${esc(SHOP.email)}</div>
+      ${SHOP.gstin ? `<div>GSTIN: ${esc(SHOP.gstin)}</div>` : ''}${SHOP.dl ? `<div>Drug Licence: ${esc(SHOP.dl)}</div>` : ''}
+    </div>
+    <div class="py-2 border-b border-gray-400 space-y-0.5">
+      <div class="flex justify-between"><span>Bill no: <b>${esc(s.id)}</b></span><span>${fdate(s.date)}</span></div>
+      <div>Customer: ${esc(s.customer)} ${s.phone ? '(' + esc(s.phone) + ')' : ''}</div><div>Payment: <b>${esc(s.mode)}</b></div>
+    </div>
+    <div class="py-2">${s.items.map(i => `<div class="flex justify-between border-b border-dashed py-1"><div>${esc(i.name)}<div class="text-[10px] text-gray-500">Batch ${esc(i.batch)} · ${i.qty} x ${inr(i.price)} · GST ${i.gst}%</div></div><div>${inr(i.price * i.qty)}</div></div>`).join('')}</div>
+    <div class="pt-2 border-t border-gray-400 text-right space-y-0.5">
+      <div>Subtotal: ${inr(s.sub)}</div>${s.disc > 0 ? `<div>Discount: -${inr(s.disc)}</div>` : ''}<div>GST: ${inr(s.tax)}</div>
+      <div class="font-bold text-sm">Total: ${inr(s.total)}</div>${saleDue(s) > 0 ? `<div>Due: ${inr(saleDue(s))}</div>` : ''}
+    </div>
+    <div class="text-center pt-3 text-[10px] text-gray-500">Thank you. Get well soon.</div>`;
+  openM('m-inv');
+}
+
+// ---- Inventory ----
+function renderInv() {
+  const q = $('inv-q').value.toLowerCase(), f = $('inv-f').value;
+  const list = db.inv.filter(i => {
+    const s = itemState(i);
+    if (!(i.name + ' ' + i.batch + ' ' + i.cat).toLowerCase().includes(q)) return false;
+    return f === 'all' || (f === 'instock' && i.qty > 0) || (f === 'low' && s.low) || (f === 'out' && s.out) || (f === 'near' && s.near) || (f === 'expired' && s.expired);
+  });
+  const b = (t, c) => `<span class="px-2 py-0.5 rounded text-[10px] ${c} font-medium">${t}</span> `;
+  $('inv-body').innerHTML = list.length ? list.map(i => {
+    const s = itemState(i);
+    const badge = (s.out ? b('Out of stock', 'bg-red-100 text-red-700') : s.low ? b('Low', 'bg-amber-100 text-amber-700') : b('In stock', 'bg-green-100 text-green-700'))
+      + (s.expired ? b('Expired', 'bg-red-600 text-white') : s.near ? b('Near expiry', 'bg-purple-100 text-purple-700') : '');
+    return `<tr><td class="p-2 font-medium">${esc(i.name)}</td><td class="p-2">${esc(i.cat)}</td><td class="p-2 text-center font-mono">${esc(i.batch)}</td><td class="p-2 text-center">${esc(i.exp)}</td>
+      <td class="p-2 text-right">${inr(i.mrp)}</td><td class="p-2 text-right font-bold">${inr(i.price)}</td><td class="p-2 text-center">${i.gst}%</td><td class="p-2 text-center font-bold">${i.qty}</td><td class="p-2">${badge}</td>
+      <td class="p-2 whitespace-nowrap"><button onclick="openMed('${i.id}')" class="text-blue-600 mr-2"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="delMed('${i.id}')" class="text-red-600"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+  }).join('') : '<tr><td colspan="10" class="text-center text-gray-400 py-8">No items found.</td></tr>';
+}
+function openMed(id) {
+  const i = id && db.inv.find(x => x.id === id);
+  $('med-title').textContent = i ? 'Edit medicine' : 'Add medicine';
+  $('med-id').value = i ? i.id : '';
+  $('med-name').value = i ? i.name : ''; $('med-cat').value = i ? i.cat : 'Tablet'; $('med-batch').value = i ? i.batch : '';
+  $('med-exp').value = i ? i.exp : ''; $('med-qty').value = i ? i.qty : ''; $('med-gst').value = i ? i.gst : 12;
+  $('med-mrp').value = i ? i.mrp : ''; $('med-price').value = i ? i.price : '';
+  openM('m-med');
+}
+function saveMed(e) {
+  e.preventDefault();
+  const o = { name: $('med-name').value.trim(), cat: $('med-cat').value, batch: $('med-batch').value.trim(), exp: $('med-exp').value,
+    qty: parseInt($('med-qty').value), gst: +$('med-gst').value, mrp: +$('med-mrp').value, price: +$('med-price').value };
+  const id = $('med-id').value;
+  if (id) Object.assign(db.inv.find(x => x.id === id), o); else db.inv.push({ id: uid(), ...o });
+  save(); closeM('m-med'); renderAll(); toast('Medicine saved.');
+}
+function delMed(id) { if (confirm('Delete this medicine from stock?')) { db.inv = db.inv.filter(x => x.id !== id); save(); renderAll(); } }
+
+// ---- Purchases ----
+function addRow() {
+  $('po-rows').insertAdjacentHTML('beforeend', `<div class="po-row grid grid-cols-4 gap-1.5 p-2 border rounded bg-gray-50">
+    <input class="r-name col-span-2 p-1.5 border rounded" placeholder="Medicine name" required>
+    <input class="r-batch p-1.5 border rounded" placeholder="Batch" required>
+    <input class="r-exp p-1.5 border rounded" type="date" required>
+    <input class="r-qty p-1.5 border rounded" type="number" min="1" placeholder="Qty" required oninput="poTotal()">
+    <input class="r-cost p-1.5 border rounded" type="number" step="0.01" min="0" placeholder="Cost" required oninput="poTotal()">
+    <input class="r-mrp p-1.5 border rounded" type="number" step="0.01" min="0" placeholder="MRP" required>
+    <input class="r-price p-1.5 border rounded" type="number" step="0.01" min="0" placeholder="Sell price" required>
+    <select class="r-gst col-span-3 p-1.5 border rounded bg-white" onchange="poTotal()"><option value="0">GST 0%</option><option value="5">GST 5%</option><option value="12" selected>GST 12%</option><option value="18">GST 18%</option></select>
+    <button type="button" onclick="this.closest('.po-row').remove();poTotal()" class="text-red-600">Remove</button></div>`);
+}
+function readRows() {
+  return [...document.querySelectorAll('.po-row')].map(r => ({
+    name: r.querySelector('.r-name').value.trim(), batch: r.querySelector('.r-batch').value.trim(), exp: r.querySelector('.r-exp').value,
+    qty: parseInt(r.querySelector('.r-qty').value) || 0, cost: +r.querySelector('.r-cost').value || 0, mrp: +r.querySelector('.r-mrp').value || 0,
+    price: +r.querySelector('.r-price').value || 0, gst: +r.querySelector('.r-gst').value }));
+}
+const rowsTotal = rows => r2(rows.reduce((a, x) => a + x.qty * x.cost * (1 + x.gst / 100), 0));
+function poTotal() { $('po-total').textContent = inr(rowsTotal(readRows())); }
+function openPO(status) {
+  $('po-title').textContent = status === 'Received' ? 'New purchase invoice' : 'New purchase order';
+  $('po-status').value = status; $('po-sup').value = ''; $('po-paid').value = ''; $('po-rows').innerHTML = '';
+  $('po-date').value = new Date().toISOString().slice(0, 10);
+  addRow(); poTotal(); openM('m-po');
+}
+function stockIn(items) {
+  items.forEach(x => {
+    const e = db.inv.find(i => i.name.toLowerCase() === x.name.toLowerCase() && i.batch.toLowerCase() === x.batch.toLowerCase());
+    if (e) { e.qty += x.qty; e.exp = x.exp; e.mrp = x.mrp; e.price = x.price; e.gst = x.gst; }
+    else db.inv.push({ id: uid(), name: x.name, cat: 'Tablet', batch: x.batch, exp: x.exp, mrp: x.mrp, price: x.price, gst: x.gst, qty: x.qty });
+  });
+}
+function savePO(e) {
+  e.preventDefault();
+  const items = readRows(); if (!items.length) return toast('Add at least one item.');
+  const amount = rowsTotal(items), paid = Math.min(amount, +$('po-paid').value || 0), status = $('po-status').value;
+  const po = { id: nextNo(db.po, 'PO-', 1001), supplier: $('po-sup').value.trim(), date: $('po-date').value, status, items, amount, paid };
+  if (status === 'Received') stockIn(items);
+  db.po.unshift(po);
+  if (paid > 0) db.pay.push({ date: new Date().toISOString(), type: 'sup', ref: po.id, amount: paid });
+  save(); closeM('m-po'); renderAll(); toast(status === 'Received' ? 'Saved and stock updated.' : 'Order saved.');
+}
+function receivePO(id) {
+  const p = db.po.find(x => x.id === id);
+  if (!p || p.status === 'Received') return;
+  stockIn(p.items); p.status = 'Received'; save(); renderAll(); toast('Received. Stock updated.');
+}
+function renderPO() {
+  let due = 0;
+  $('po-body').innerHTML = db.po.length ? db.po.map(p => {
+    due += poDue(p);
+    return `<tr><td class="p-2 font-mono font-bold">${esc(p.id)}</td><td class="p-2">${esc(p.supplier)}</td><td class="p-2 text-center">${esc(p.date)}</td><td class="p-2 text-center">${p.items.length}</td>
+      <td class="p-2 text-right">${inr(p.amount)}</td><td class="p-2 text-right">${inr(p.paid)}</td><td class="p-2 text-right font-bold">${inr(poDue(p))}</td>
+      <td class="p-2 text-center"><span class="px-2 py-0.5 rounded text-[10px] ${p.status === 'Received' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}">${p.status}</span></td>
+      <td class="p-2 whitespace-nowrap">${p.status === 'Pending' ? `<button onclick="receivePO('${p.id}')" class="bg-red-700 text-white px-2 py-1 rounded mr-1">Receive</button>` : ''}${poDue(p) > 0 ? `<button onclick="openPay('sup','${p.id}')" class="bg-amber-600 text-white px-2 py-1 rounded">Pay</button>` : ''}</td></tr>`;
+  }).join('') : '<tr><td colspan="9" class="text-center text-gray-400 py-8">No purchases yet.</td></tr>';
+  $('po-due').textContent = inr(due);
+}
+
+// ---- Payments ----
+function openPay(type, ref) { $('pay-type').value = type || 'sup'; fillPay(ref); openM('m-pay'); }
+function fillPay(ref) {
+  const sup = $('pay-type').value === 'sup';
+  const rows = sup ? db.po.filter(p => poDue(p) > 0).map(p => [p.id, `${p.id} · ${p.supplier} · due ${inr(poDue(p))}`])
+                   : db.sales.filter(s => saleDue(s) > 0).map(s => [s.id, `${s.id} · ${s.customer} · due ${inr(saleDue(s))}`]);
+  $('pay-ref').innerHTML = rows.length ? rows.map(r => `<option value="${esc(r[0])}">${esc(r[1])}</option>`).join('') : '<option value="">Nothing is due</option>';
+  if (ref) $('pay-ref').value = ref;
+  payDefault();
+}
+function payDefault() {
+  const id = $('pay-ref').value, sup = $('pay-type').value === 'sup';
+  const x = sup ? db.po.find(p => p.id === id) : db.sales.find(s => s.id === id);
+  $('pay-amt').value = x ? (sup ? poDue(x) : saleDue(x)) : '';
+}
+function savePay(e) {
+  e.preventDefault();
+  const sup = $('pay-type').value === 'sup', id = $('pay-ref').value;
+  const x = sup ? db.po.find(p => p.id === id) : db.sales.find(s => s.id === id);
+  if (!x) return toast('Nothing is due to settle.');
+  const due = sup ? poDue(x) : saleDue(x), amt = Math.min(due, +$('pay-amt').value || 0);
+  if (amt <= 0) return toast('Enter an amount.');
+  x.paid = r2(x.paid + amt);
+  db.pay.push({ date: new Date().toISOString(), type: sup ? 'sup' : 'cus', ref: id, amount: amt });
+  save(); closeM('m-pay'); renderAll(); toast('Payment saved.');
+}
+
+// ---- Reports ----
+function monthSales() {
+  const m = $('rep-m').value;
+  return db.sales.filter(s => !m || ym(s.date) === m);
+}
+function renderRep() {
+  const months = [...new Set(db.sales.map(s => ym(s.date)))].sort().reverse();
+  const cur = $('rep-m').value;
+  $('rep-m').innerHTML = '<option value="">All months</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
+  $('rep-m').value = months.includes(cur) ? cur : '';
+  const list = monthSales(), total = list.reduce((a, s) => a + s.total, 0), tax = list.reduce((a, s) => a + s.tax, 0);
+  $('rep-sum').textContent = `${list.length} bills · Sales ${inr(total)} · GST ${inr(tax)}`;
+  $('rep-body').innerHTML = list.length ? list.map(s => `<tr><td class="p-2 font-mono font-bold text-red-700">${esc(s.id)}</td><td class="p-2">${fdate(s.date)}</td><td class="p-2">${esc(s.customer)}</td><td class="p-2">${esc(s.mode)}</td>
+    <td class="p-2 text-right font-bold">${inr(s.total)}</td><td class="p-2 text-right">${inr(saleDue(s))}</td><td class="p-2"><button onclick="showInv('${s.id}')" class="text-blue-600"><i class="fa-solid fa-eye"></i></button></td></tr>`).join('')
+    : '<tr><td colspan="7" class="text-center text-gray-400 py-8">No sales yet.</td></tr>';
+}
+function download(name, text, type) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click();
+}
+function exportCSV() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const rows = [['Bill no', 'Date', 'Customer', 'Phone', 'Payment', 'Subtotal', 'Discount', 'GST', 'Total', 'Due'].map(q).join(',')]
+    .concat(monthSales().map(s => [s.id, fdate(s.date), s.customer, s.phone, s.mode, s.sub, s.disc, s.tax, s.total, saleDue(s)].map(q).join(',')));
+  download('asap-sales-' + ($('rep-m').value || 'all') + '.csv', rows.join('\n'), 'text/csv');
+}
+
+// ---- Backup / restore / clear ----
+function backup() { download('asap-backup-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(db), 'application/json'); toast('Backup downloaded.'); }
+function restore(el) {
+  const f = el.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!Array.isArray(d.inv) || !Array.isArray(d.po) || !Array.isArray(d.sales)) throw 0;
+      if (!confirm('Replace all current data with this backup?')) return;
+      db = { inv: d.inv, po: d.po, sales: d.sales, pay: d.pay || [] }; save(); renderAll(); toast('Backup restored.');
+    } catch { toast('This is not a valid backup file.'); }
+    el.value = '';
+  };
+  r.readAsText(f);
+}
+function clearAll() {
+  if (!confirm('Delete ALL stock, sales and purchase data? Download a backup first.')) return;
+  db = { inv: [], po: [], sales: [], pay: [] }; save(); renderAll(); toast('All data cleared.');
+}
+
+// ---- Start ----
+$('shop-name').textContent = SHOP.name;
+$('shop-addr').textContent = SHOP.addr;
+$('shop-contact').textContent = SHOP.phone + ' | ' + SHOP.email;
+setInterval(() => { $('clock').textContent = new Date().toLocaleString('en-GB'); }, 1000);
+tab('dashboard');
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
