@@ -1,0 +1,29 @@
+name: Build Windows app
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Bundle styles so the app works offline
+        shell: bash
+        run: |
+          npm i --no-save @fortawesome/fontawesome-free
+          mkdir -p vendor/css vendor/webfonts
+          cp node_modules/@fortawesome/fontawesome-free/css/all.min.css vendor/css/
+          cp node_modules/@fortawesome/fontawesome-free/webfonts/* vendor/webfonts/
+          echo "@tailwind base; @tailwind components; @tailwind utilities;" > tw-in.css
+          npx --yes tailwindcss@3 -i tw-in.css -o tailwind.css --content ./index.html --minify
+          sed -i 's|<script src="https://cdn.tailwindcss.com"></script>|<link rel="stylesheet" href="tailwind.css">|' index.html
+          sed -i 's|https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css|vendor/css/all.min.css|' index.html
+      - run: npx electron-builder --win portable --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ASAP-Pharmacy-Windows
+          path: dist/ASAP-Pharmacy.exe

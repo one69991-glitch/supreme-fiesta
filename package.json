@@ -1,0 +1,18 @@
+{
+  "name": "asap-pharmacy",
+  "version": "1.0.0",
+  "description": "ASAP PHARMACY billing and stock",
+  "main": "main.js",
+  "author": "Suraj Bairagi",
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.asappharmacy.app",
+    "productName": "ASAP Pharmacy",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "index.html", "tailwind.css", "icon-512.png", "vendor/**/*"],
+    "win": { "target": "portable", "icon": "icon-512.png", "artifactName": "ASAP-Pharmacy.exe" }
+  }
+}
